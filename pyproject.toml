@@ -47,6 +47,7 @@ dev = [
     "pytest-timeout>=2.0.0",
     "mypy>=1.0.0",
     "ruff>=0.1.0",
+    "types-requests>=2.25.0",
 ]
 unix-sockets = [
     "requests-unixsocket>=0.3.0",

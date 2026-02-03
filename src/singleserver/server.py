@@ -10,6 +10,8 @@ import signal
 import threading
 from collections.abc import Callable
 from pathlib import Path
+from types import TracebackType
+from typing import Any
 
 from .client import ServerClient
 from .lock import SocketLock
@@ -95,8 +97,8 @@ class SingleServer:
             self._lock_port = lock_port
             self._lock_socket = Path(lock_socket) if lock_socket else None
         elif port is not None:
-            # Use a separate lock port by default
-            self._lock_port = port + 10000  # Offset to avoid conflicts
+            # Use a separate lock port by default (ensure it stays within valid range)
+            self._lock_port = port + 10000 if port + 10000 <= 65535 else port - 10000
             self._lock_socket = None
         else:
             # Use a separate lock socket
@@ -151,13 +153,13 @@ class SingleServer:
         def check() -> bool:
             try:
                 client = ServerClient(
-                    host="127.0.0.1" if self.port else None,
+                    host="127.0.0.1",
                     port=self.port,
                     socket_path=self.socket_path,
                     health_check_url=self.health_check_url,
                     startup_timeout=2.0,
                 )
-                return client.check_ready()
+                return bool(client.check_ready())
             except Exception:
                 return False
 
@@ -171,7 +173,7 @@ class SingleServer:
         atexit.register(self._cleanup)
 
         # Also handle signals for clean shutdown
-        def signal_handler(signum, frame):
+        def signal_handler(signum: int, frame: Any) -> None:
             self._cleanup()
             # Re-raise signal for default handling
             signal.signal(signum, signal.SIG_DFL)
@@ -307,7 +309,12 @@ class SingleServer:
         """Context manager entry - connects to the server."""
         return self.connect()
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Context manager exit - disconnects from the server."""
         self.disconnect()
 
@@ -326,7 +333,7 @@ class ManagedServer:
         command: list[str],
         port: int | None = None,
         socket: str | Path | None = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         """
         Initialize the managed server.
@@ -364,13 +371,13 @@ class ManagedServer:
             def check() -> bool:
                 try:
                     client = ServerClient(
-                        host="127.0.0.1" if self.port else None,
+                        host="127.0.0.1",
                         port=self.port,
                         socket_path=self.socket_path,
                         health_check_url=health_check_url,
                         startup_timeout=2.0,
                     )
-                    return client.check_ready()
+                    return bool(client.check_ready())
                 except Exception:
                     return False
 
@@ -416,5 +423,10 @@ class ManagedServer:
     def __enter__(self) -> ServerClient:
         return self.start()
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self.stop()

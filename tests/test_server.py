@@ -258,11 +258,12 @@ class TestSingleServerFailover:
 
         # A new SingleServer with the SAME lock port should be able to become owner
         # Using different server port to avoid TIME_WAIT issues
+        lock_port = port1 + 10000 if port1 + 10000 <= 65535 else port1 - 10000
         server2 = SingleServer(
             name="test",
             command=[sys.executable, str(test_server_script), str(port2)],
             port=port2,
-            lock_port=port1 + 10000,  # Same lock as server1
+            lock_port=lock_port,  # Same lock as server1
             startup_timeout=10.0,
         )
         client2 = server2.connect()

@@ -12,6 +12,7 @@ import errno
 import os
 import socket
 from pathlib import Path
+from types import TracebackType
 
 
 class SocketLock:
@@ -73,6 +74,7 @@ class SocketLock:
         """Return the address this lock binds to."""
         if self.socket_path:
             return str(self.socket_path)
+        assert self.port is not None  # Guaranteed by __init__ validation
         return (self.host, self.port)
 
     def try_acquire(self) -> bool:
@@ -162,7 +164,12 @@ class SocketLock:
         self.try_acquire()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Context manager exit - releases the lock."""
         self.release()
 
@@ -263,7 +270,12 @@ class LockFile:
         self.try_acquire()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self.release()
 
     def __del__(self) -> None:

@@ -8,6 +8,7 @@ import logging
 import socket
 import time
 from pathlib import Path
+from types import TracebackType
 from typing import Any
 from urllib.parse import urljoin
 
@@ -129,7 +130,7 @@ class ServerClient:
                     session = requests_unixsocket.Session()
                     url = f"http+unix://{str(self.socket_path).replace('/', '%2F')}{self.health_check_url}"
                     response = session.get(url, timeout=2.0)
-                    return response.ok
+                    return bool(response.ok)
                 except ImportError:
                     # Fall back to socket check
                     return self._check_unix_connection()
@@ -138,7 +139,7 @@ class ServerClient:
                     f"http://{self.host}:{self.port}{self.health_check_url}",
                     timeout=2.0,
                 )
-                return response.ok
+                return bool(response.ok)
         except Exception:
             return False
 
@@ -215,7 +216,7 @@ class ServerClient:
             raise NotImplementedError("HTTP methods with Unix sockets require requests-unixsocket")
         return urljoin(f"http://{self.host}:{self.port}/", path.lstrip("/"))
 
-    def get(self, path: str, **kwargs) -> Any:
+    def get(self, path: str, **kwargs: Any) -> Any:
         """
         Make a GET request to the server.
 
@@ -229,7 +230,7 @@ class ServerClient:
         session = self._get_session()
         return session.get(self._make_url(path), **kwargs)
 
-    def post(self, path: str, **kwargs) -> Any:
+    def post(self, path: str, **kwargs: Any) -> Any:
         """
         Make a POST request to the server.
 
@@ -243,7 +244,7 @@ class ServerClient:
         session = self._get_session()
         return session.post(self._make_url(path), **kwargs)
 
-    def put(self, path: str, **kwargs) -> Any:
+    def put(self, path: str, **kwargs: Any) -> Any:
         """
         Make a PUT request to the server.
 
@@ -257,7 +258,7 @@ class ServerClient:
         session = self._get_session()
         return session.put(self._make_url(path), **kwargs)
 
-    def delete(self, path: str, **kwargs) -> Any:
+    def delete(self, path: str, **kwargs: Any) -> Any:
         """
         Make a DELETE request to the server.
 
@@ -271,7 +272,7 @@ class ServerClient:
         session = self._get_session()
         return session.delete(self._make_url(path), **kwargs)
 
-    def request(self, method: str, path: str, **kwargs) -> Any:
+    def request(self, method: str, path: str, **kwargs: Any) -> Any:
         """
         Make an arbitrary HTTP request to the server.
 
@@ -295,5 +296,10 @@ class ServerClient:
     def __enter__(self) -> ServerClient:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self.close()

@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from types import TracebackType
 from typing import IO
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ class ProcessOptions:
     shutdown_timeout: float = 10.0
     shutdown_signal: int = signal.SIGTERM
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if isinstance(self.cwd, str):
             self.cwd = Path(self.cwd)
 
@@ -479,5 +480,10 @@ class ProcessOwner:
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self.stop()
