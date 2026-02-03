@@ -75,6 +75,35 @@ class TestSingleServerBasic:
         )
         assert server.command == ["server", "-p", str(free_port)]
 
+    def test_default_host_is_localhost(self, free_port: int):
+        """Test that default host is 127.0.0.1."""
+        server = SingleServer(
+            name="test",
+            command=["echo", "hello"],
+            port=free_port,
+        )
+        assert server.host == "127.0.0.1"
+
+    def test_custom_host(self, free_port: int):
+        """Test that custom host can be set."""
+        server = SingleServer(
+            name="test",
+            command=["echo", "hello"],
+            port=free_port,
+            host="0.0.0.0",
+        )
+        assert server.host == "0.0.0.0"
+
+    def test_host_placeholder_replacement(self, free_port: int):
+        """Test that {host} placeholder is replaced."""
+        server = SingleServer(
+            name="test",
+            command=["server", "-h", "{host}", "-p", "{port}"],
+            port=free_port,
+            host="0.0.0.0",
+        )
+        assert server.command == ["server", "-h", "0.0.0.0", "-p", str(free_port)]
+
 
 class TestSingleServerConnect:
     """Tests for SingleServer.connect()."""
@@ -315,6 +344,35 @@ class TestManagedServer:
             port=free_port,
         )
         assert server.command == ["server", "--port", str(free_port)]
+
+    def test_default_host(self, free_port: int):
+        """Test that default host is 127.0.0.1."""
+        server = ManagedServer(
+            name="test",
+            command=["echo"],
+            port=free_port,
+        )
+        assert server.host == "127.0.0.1"
+
+    def test_custom_host(self, free_port: int):
+        """Test that custom host can be set."""
+        server = ManagedServer(
+            name="test",
+            command=["echo"],
+            port=free_port,
+            host="0.0.0.0",
+        )
+        assert server.host == "0.0.0.0"
+
+    def test_host_placeholder(self, free_port: int):
+        """Test that {host} placeholder is replaced."""
+        server = ManagedServer(
+            name="test",
+            command=["server", "-h", "{host}", "-p", "{port}"],
+            port=free_port,
+            host="192.168.1.1",
+        )
+        assert server.command == ["server", "-h", "192.168.1.1", "-p", str(free_port)]
 
 
 class TestSingleServerOutputRedirect:

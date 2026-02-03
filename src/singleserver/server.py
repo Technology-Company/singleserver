@@ -45,6 +45,7 @@ class SingleServer:
         name: str,
         command: list[str],
         port: int | None = None,
+        host: str = "127.0.0.1",
         socket: str | Path | None = None,
         lock_port: int | None = None,
         lock_socket: str | Path | None = None,
@@ -66,8 +67,9 @@ class SingleServer:
 
         Args:
             name: Identifier for logging/debugging.
-            command: Command to run. Can include {port} placeholder.
+            command: Command to run. Can include {port}, {host}, {socket} placeholders.
             port: TCP port the server will listen on.
+            host: IP address to bind to (default: 127.0.0.1 for localhost only).
             socket: Unix socket path the server will listen on.
             lock_port: Separate port for the coordination lock (defaults to port - 1).
             lock_socket: Separate socket path for coordination lock.
@@ -90,6 +92,7 @@ class SingleServer:
         self.name = name
         self._command_template = command
         self.port = port
+        self.host = host
         self.socket_path = Path(socket) if socket else None
 
         # Determine lock address (separate from server address)
@@ -132,6 +135,8 @@ class SingleServer:
         for part in self._command_template:
             if "{port}" in part:
                 part = part.replace("{port}", str(self.port))
+            if "{host}" in part:
+                part = part.replace("{host}", self.host)
             if "{socket}" in part:
                 part = part.replace("{socket}", str(self.socket_path))
             result.append(part)
@@ -153,7 +158,7 @@ class SingleServer:
         def check() -> bool:
             try:
                 client = ServerClient(
-                    host="127.0.0.1",
+                    host=self.host,
                     port=self.port,
                     socket_path=self.socket_path,
                     health_check_url=self.health_check_url,
@@ -271,7 +276,7 @@ class SingleServer:
 
             # Create client
             self._client = ServerClient(
-                host="127.0.0.1",
+                host=self.host,
                 port=self.port,
                 socket_path=self.socket_path,
                 health_check_url=self.health_check_url,
@@ -332,6 +337,7 @@ class ManagedServer:
         name: str,
         command: list[str],
         port: int | None = None,
+        host: str = "127.0.0.1",
         socket: str | Path | None = None,
         **kwargs: Any,
     ):
@@ -343,6 +349,7 @@ class ManagedServer:
         self.name = name
         self._command_template = command
         self.port = port
+        self.host = host
         self.socket_path = Path(socket) if socket else None
         self._kwargs = kwargs
         self._owner: ProcessOwner | None = None
@@ -355,6 +362,8 @@ class ManagedServer:
         for part in self._command_template:
             if "{port}" in part:
                 part = part.replace("{port}", str(self.port))
+            if "{host}" in part:
+                part = part.replace("{host}", self.host)
             if "{socket}" in part:
                 part = part.replace("{socket}", str(self.socket_path))
             result.append(part)
@@ -371,7 +380,7 @@ class ManagedServer:
             def check() -> bool:
                 try:
                     client = ServerClient(
-                        host="127.0.0.1",
+                        host=self.host,
                         port=self.port,
                         socket_path=self.socket_path,
                         health_check_url=health_check_url,
@@ -401,7 +410,7 @@ class ManagedServer:
         self._owner.start()
 
         self._client = ServerClient(
-            host="127.0.0.1",
+            host=self.host,
             port=self.port,
             socket_path=self.socket_path,
             health_check_url=health_check_url,
