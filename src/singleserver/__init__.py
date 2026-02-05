@@ -22,14 +22,13 @@ Example:
 from .client import ServerClient, ServerNotReady
 from .lock import LockFile, SocketLock
 from .process import ProcessOwner, ProcessState
-from .server import ManagedServer, SingleServer
+from .server import SingleServer
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     # Main classes
     "SingleServer",
-    "ManagedServer",
     # Supporting classes
     "ServerClient",
     "ProcessOwner",

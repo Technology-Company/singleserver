@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from singleserver import ManagedServer, ServerClient, SingleServer
+from singleserver import ServerClient, SingleServer
 
 
 # Module-level function for multiprocessing (can't pickle local functions)
@@ -304,75 +304,6 @@ class TestSingleServerFailover:
         assert new_pid != original_pid
 
         server2.disconnect()
-
-
-class TestManagedServer:
-    """Tests for ManagedServer (non-singleton variant)."""
-
-    def test_basic_usage(self, free_port: int, test_server_script: Path):
-        """Test basic ManagedServer usage."""
-        server = ManagedServer(
-            name="test",
-            command=[sys.executable, str(test_server_script), str(free_port)],
-            port=free_port,
-            startup_timeout=10.0,
-        )
-
-        with server as client:
-            response = client.get("/")
-            assert response.status_code == 200
-
-    def test_start_twice_raises(self, free_port: int, test_server_script: Path):
-        """Test that starting twice raises an error."""
-        server = ManagedServer(
-            name="test",
-            command=[sys.executable, str(test_server_script), str(free_port)],
-            port=free_port,
-        )
-
-        server.start()
-        with pytest.raises(RuntimeError, match="already started"):
-            server.start()
-
-        server.stop()
-
-    def test_command_placeholder(self, free_port: int):
-        """Test command placeholder replacement."""
-        server = ManagedServer(
-            name="test",
-            command=["server", "--port", "{port}"],
-            port=free_port,
-        )
-        assert server.command == ["server", "--port", str(free_port)]
-
-    def test_default_host(self, free_port: int):
-        """Test that default host is 127.0.0.1."""
-        server = ManagedServer(
-            name="test",
-            command=["echo"],
-            port=free_port,
-        )
-        assert server.host == "127.0.0.1"
-
-    def test_custom_host(self, free_port: int):
-        """Test that custom host can be set."""
-        server = ManagedServer(
-            name="test",
-            command=["echo"],
-            port=free_port,
-            host="0.0.0.0",
-        )
-        assert server.host == "0.0.0.0"
-
-    def test_host_placeholder(self, free_port: int):
-        """Test that {host} placeholder is replaced."""
-        server = ManagedServer(
-            name="test",
-            command=["server", "-h", "{host}", "-p", "{port}"],
-            port=free_port,
-            host="192.168.1.1",
-        )
-        assert server.command == ["server", "-h", "192.168.1.1", "-p", str(free_port)]
 
 
 class TestSingleServerOutputRedirect:

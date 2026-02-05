@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "singleserver"
-version = "0.2.0"
+version = "0.3.0"
 description = "Manage singleton server processes across multiple workers using atomic socket binding"
 readme = "README.md"
 license = "MIT"
