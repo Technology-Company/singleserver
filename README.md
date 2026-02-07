@@ -1,5 +1,10 @@
 # singleserver
 
+[![PyPI Version](https://badgen.net/pypi/v/singleserver)](https://pypi.org/project/singleserver/)
+[![Python Versions](https://badgen.net/pypi/python/singleserver)](https://pypi.org/project/singleserver/)
+[![License](https://badgen.net/badge/license/MIT/blue)](https://github.com/Technology-Company/singleserver/blob/main/LICENSE)
+[![Last Commit](https://badgen.net/github/last-commit/Technology-Company/singleserver)](https://github.com/Technology-Company/singleserver/commits)
+
 Manage singleton server processes across multiple workers using atomic socket binding.
 
 ## Problem
