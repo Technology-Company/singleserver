@@ -306,6 +306,65 @@ class TestSingleServerFailover:
         server2.disconnect()
 
 
+class TestSingleServerReconnect:
+    """Tests for automatic reconnection when the server dies."""
+
+    def test_client_reconnects_after_owner_dies(self, free_port: int, test_server_script: Path):
+        """Test that a client re-acquires ownership when the server dies."""
+        # server1 becomes owner
+        server1 = SingleServer(
+            name="test",
+            command=[sys.executable, str(test_server_script), str(free_port)],
+            port=free_port,
+            startup_timeout=10.0,
+        )
+        client1 = server1.connect()
+        assert server1.is_owner
+        original_pid = int(client1.get("/pid").text)
+
+        # server2 connects as client
+        server2 = SingleServer(
+            name="test",
+            command=[sys.executable, str(test_server_script), str(free_port)],
+            port=free_port,
+            startup_timeout=10.0,
+        )
+        server2.connect()
+        assert not server2.is_owner
+
+        try:
+            # Owner dies — kills the server process, releases the lock
+            server1.disconnect()
+            time.sleep(0.5)
+
+            # server2 calls connect() again — detects dead server, becomes owner
+            client2 = server2.connect()
+            assert server2.is_owner
+
+            new_pid = int(client2.get("/pid").text)
+            assert new_pid != original_pid
+        finally:
+            server2.disconnect()
+
+    def test_connect_returns_cached_client_when_healthy(
+        self, free_port: int, test_server_script: Path
+    ):
+        """Test that connect() returns the cached client when the server is healthy."""
+        server = SingleServer(
+            name="test",
+            command=[sys.executable, str(test_server_script), str(free_port)],
+            port=free_port,
+            startup_timeout=10.0,
+        )
+
+        try:
+            client1 = server.connect()
+            client2 = server.connect()
+            assert client1 is client2
+        finally:
+            server.disconnect()
+
+
 class TestSingleServerOutputRedirect:
     """Tests for output redirection."""
 

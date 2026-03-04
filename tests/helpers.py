@@ -60,6 +60,7 @@ def run_test_server(port: int, startup_delay: float = 0):
     if startup_delay > 0:
         time.sleep(startup_delay)
 
+    socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("127.0.0.1", port), SimpleTestHandler) as httpd:
         httpd.serve_forever()
 

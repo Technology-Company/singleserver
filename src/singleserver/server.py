@@ -238,7 +238,11 @@ class SingleServer:
         """
         with self._state_lock:
             if self._client is not None:
-                return self._client
+                if self._client.check_ready():
+                    return self._client
+                # Server is dead — clean up stale state and re-acquire
+                logger.info(f"Server {self.name} is down, reconnecting")
+                self._cleanup()
 
             # Create the lock
             self._lock = SocketLock(
