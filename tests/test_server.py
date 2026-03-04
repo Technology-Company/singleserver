@@ -306,6 +306,97 @@ class TestSingleServerFailover:
         server2.disconnect()
 
 
+class TestSingleServerSelfHealing:
+    """Tests for client-mode self-healing when the owner dies."""
+
+    def test_client_becomes_owner_after_server_dies(self, free_ports, test_server_script: Path):
+        """Test that a client with auto_reconnect takes over when the owner dies."""
+        port = next(free_ports)
+
+        # Start server1 as owner
+        server1 = SingleServer(
+            name="test",
+            command=[sys.executable, str(test_server_script), str(port)],
+            port=port,
+            startup_timeout=10.0,
+            health_check_interval=0.5,
+        )
+        client1 = server1.connect()
+        assert server1.is_owner
+
+        original_pid = int(client1.get("/pid").text)
+
+        # Connect server2 as client with auto_reconnect (default)
+        server2 = SingleServer(
+            name="test",
+            command=[sys.executable, str(test_server_script), str(port)],
+            port=port,
+            startup_timeout=10.0,
+            health_check_interval=0.5,
+            auto_reconnect=True,
+        )
+        client2 = server2.connect()
+        assert not server2.is_owner
+
+        try:
+            # Kill the owner — process dies, lock is released
+            server1.disconnect()
+            time.sleep(0.5)
+
+            # Wait for server2's watchdog to detect failure and take over
+            deadline = time.time() + 15.0
+            while time.time() < deadline:
+                if server2.is_owner:
+                    break
+                time.sleep(0.25)
+
+            assert server2.is_owner, "Client should have become owner after server died"
+
+            # Verify the new server is serving requests with a new PID
+            response = client2.get("/pid")
+            new_pid = int(response.text)
+            assert new_pid != original_pid
+        finally:
+            server2.disconnect()
+
+    def test_auto_reconnect_disabled(self, free_ports, test_server_script: Path):
+        """Test that a client with auto_reconnect=False does NOT take over."""
+        port = next(free_ports)
+
+        # Start server1 as owner
+        server1 = SingleServer(
+            name="test",
+            command=[sys.executable, str(test_server_script), str(port)],
+            port=port,
+            startup_timeout=10.0,
+            health_check_interval=0.5,
+        )
+        server1.connect()
+        assert server1.is_owner
+
+        # Connect server2 as client with auto_reconnect=False
+        server2 = SingleServer(
+            name="test",
+            command=[sys.executable, str(test_server_script), str(port)],
+            port=port,
+            startup_timeout=10.0,
+            health_check_interval=0.5,
+            auto_reconnect=False,
+        )
+        server2.connect()
+        assert not server2.is_owner
+
+        try:
+            # Kill the owner
+            server1.disconnect()
+
+            # Wait a few health check intervals — server2 should NOT become owner
+            time.sleep(3.0)
+            assert not server2.is_owner, "Client with auto_reconnect=False should not become owner"
+        finally:
+            server2.disconnect()
+
+
 class TestSingleServerOutputRedirect:
     """Tests for output redirection."""
 

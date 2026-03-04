@@ -61,6 +61,7 @@ class SingleServer:
         stderr: str | Path | None = None,
         shutdown_timeout: float = 10.0,
         shutdown_signal: int = signal.SIGTERM,
+        auto_reconnect: bool = True,
     ):
         """
         Initialize the SingleServer.
@@ -85,6 +86,9 @@ class SingleServer:
             stderr: Where to redirect stderr ("inherit", "null", "stdout", or file path).
             shutdown_timeout: Seconds to wait for graceful shutdown.
             shutdown_signal: Signal to send for shutdown.
+            auto_reconnect: If True, client instances run a background watchdog
+                that detects when the owner dies and re-acquires the lock to
+                start a fresh server process.
         """
         if port is None and socket is None:
             raise ValueError("Must provide either port or socket")
@@ -121,12 +125,16 @@ class SingleServer:
         self.shutdown_timeout = shutdown_timeout
         self.shutdown_signal = shutdown_signal
 
+        self.auto_reconnect = auto_reconnect
+
         self._lock: SocketLock | None = None
         self._owner: ProcessOwner | None = None
         self._is_owner = False
         self._client: ServerClient | None = None
         self._cleanup_registered = False
         self._state_lock = threading.Lock()
+        self._watchdog_thread: threading.Thread | None = None
+        self._watchdog_stop = threading.Event()
 
     @property
     def command(self) -> list[str]:
@@ -191,9 +199,84 @@ class SingleServer:
             # Can't set signal handlers from non-main thread
             pass
 
+    def _start_watchdog(self) -> None:
+        """Start the background watchdog thread for client-mode self-healing."""
+        self._watchdog_stop.clear()
+        self._watchdog_thread = threading.Thread(
+            target=self._watchdog_loop,
+            daemon=True,
+            name=f"singleserver-watchdog-{self.name}",
+        )
+        self._watchdog_thread.start()
+        logger.debug(f"Started watchdog for {self.name}")
+
+    def _watchdog_loop(self) -> None:
+        """Monitor the server and re-acquire ownership if it dies."""
+        while not self._watchdog_stop.is_set():
+            self._watchdog_stop.wait(self.health_check_interval)
+            if self._watchdog_stop.is_set():
+                break
+
+            # Check if the server is still healthy
+            if self._client and self._client.check_ready():
+                continue
+
+            logger.warning(f"Server {self.name} appears down, attempting to acquire lock")
+
+            # Server is down — try to become the new owner
+            lock = SocketLock(
+                port=self._lock_port,
+                socket_path=self._lock_socket,
+            )
+
+            if not lock.try_acquire():
+                # Another worker got the lock — server should come back
+                logger.debug(f"Lock for {self.name} held by another process, continuing to watch")
+                continue
+
+            # We got the lock — become the owner
+            logger.info(f"Acquired lock for {self.name}, becoming owner (self-healing)")
+            with self._state_lock:
+                self._lock = lock
+                self._is_owner = True
+
+                self._owner = ProcessOwner(
+                    command=self.command,
+                    env=self.env,
+                    cwd=self.cwd,
+                    stdout=self.stdout,
+                    stderr=self.stderr,
+                    health_check=self._create_health_check(),
+                    health_check_interval=self.health_check_interval,
+                    startup_timeout=self.startup_timeout,
+                    restart_on_failure=self.restart_on_failure,
+                    max_restarts=self.max_restarts,
+                    restart_delay=self.restart_delay,
+                    shutdown_timeout=self.shutdown_timeout,
+                    shutdown_signal=self.shutdown_signal,
+                )
+                self._owner.start()
+                self._register_cleanup()
+
+            # Wait for the new server to be ready
+            try:
+                if self._client:
+                    self._client.wait_ready()
+            except Exception as e:
+                logger.error(f"New server failed to become ready: {e}")
+
+            # ProcessOwner has its own monitor thread now, watchdog can exit
+            break
+
     def _cleanup(self) -> None:
         """Clean up resources on exit."""
         logger.debug(f"Cleaning up SingleServer {self.name}")
+
+        # Stop watchdog thread
+        self._watchdog_stop.set()
+        if self._watchdog_thread and self._watchdog_thread.is_alive():
+            self._watchdog_thread.join(timeout=2)
+        self._watchdog_thread = None
 
         if self._owner:
             try:
@@ -282,6 +365,10 @@ class SingleServer:
                 health_check_url=self.health_check_url,
                 startup_timeout=timeout or self.startup_timeout,
             )
+
+            # Start watchdog for non-owner clients
+            if not self._is_owner and self.auto_reconnect:
+                self._start_watchdog()
 
         # Wait for ready outside the lock
         if wait_ready:
